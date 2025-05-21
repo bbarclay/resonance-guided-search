@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import directly from the modules
 from src.rgs_core import adaptability
-from src.rgs_pathfinding import standard_a_star, rgm_a_star
+from src.rgs_pathfinding import standard_a_star, rgm_a_star, adaptive_rgm_a_star
 from src.rgs_viz import plot_grid_pathfinding
 
 # Create figures directory if it doesn't exist
@@ -42,6 +42,8 @@ def main():
     
     # Various depth parameters to explore
     d_res_values = [5.0, 20.0, 80.0]
+    d_res_far_adaptive = 5.0
+    d_res_near_adaptive = 80.0
     
     # Run standard A* search
     print("Running standard A* search...")
@@ -63,10 +65,26 @@ def main():
         )
         rgm_paths[f"RGM d_res={d_res}"] = path
         print(f"  RGM-guided A* path length (d_res={d_res}): {len(path)}")
+
+    # Run Adaptive RGM A* search
+    print(f"Running Adaptive RGM A* search with d_res_far={d_res_far_adaptive}, d_res_near={d_res_near_adaptive}...")
+    adaptive_path = adaptive_rgm_a_star(
+        grid_size=grid_size,
+        start=start,
+        goal=goal,
+        grid_to_x_map=grid_to_x_map,
+        N_ord=N_ord,
+        d_res_far=d_res_far_adaptive,
+        d_res_near=d_res_near_adaptive,
+        w=2.0, # Keep w consistent with other RGM runs
+        x0=0.0  # Keep x0 consistent
+    )
+    print(f"  Adaptive RGM A* path length: {len(adaptive_path)}")
     
     # Collect all paths for visualization
     all_paths = {"Standard A*": standard_path}
     all_paths.update(rgm_paths)
+    all_paths[f"Adaptive RGM ({d_res_far_adaptive}-{d_res_near_adaptive})"] = adaptive_path
     
     # Plot comparison for a specific d_res value (for background)
     d_res_for_bg = 20.0

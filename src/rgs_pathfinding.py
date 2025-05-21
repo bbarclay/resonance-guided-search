@@ -12,7 +12,7 @@ import sys
 import os
 
 # Import from within the package
-from src.rgs_core import adaptability, rgm_distance
+from src.rgs_core import adaptability, rgm_distance, adaptability_2d, rgm_distance_2d
 
 
 class Node:
@@ -82,6 +82,40 @@ def rgm_grid_distance(
     
     # Calculate RGM distance
     return rgm_distance(x1, x2, d_res, N_ord, d_base, w, x0)
+
+
+def rgm_grid_distance_2d(
+    pos1: Tuple[int, int],
+    pos2: Tuple[int, int],
+    grid_to_xy_map: Callable[[int, int], Tuple[float, float]],
+    d_res: float,
+    N_ord: List[int],
+    w: float = 2.0,
+    x0_vec: Tuple[float, float] = (0.0, 0.0)
+) -> float:
+    """
+    Calculate the RGM distance between two adjacent grid positions using 2D adaptability.
+
+    Args:
+        pos1: First position (row, col)
+        pos2: Second position (row, col)
+        grid_to_xy_map: Function to map grid position (row, col) to (x_val, y_val)
+        d_res: Depth parameter
+        N_ord: Set of orbital orders
+        w: Weight parameter
+        x0_vec: Reference point vector (x0_x, x0_y)
+
+    Returns:
+        RGM distance
+    """
+    xy1 = grid_to_xy_map(pos1[0], pos1[1])
+    xy2 = grid_to_xy_map(pos2[0], pos2[1])
+
+    # Base distance (Manhattan distance = 1 for adjacent cells)
+    d_base = 1.0
+
+    # Calculate RGM distance using the 2D version
+    return rgm_distance_2d(xy1, xy2, d_res, N_ord, d_base, w, x0_vec)
 
 
 def a_star_search(
@@ -228,6 +262,114 @@ def rgm_a_star(
     def distance_func(pos1, pos2):
         return rgm_grid_distance(pos1, pos2, grid_to_x_map, d_res, N_ord, w, x0)
     
+    # Use Manhattan distance as a heuristic
+    # Note: This might not be admissible for A* if RGM distances can be less than Manhattan,
+    # but it works for demonstration purposes
+    return a_star_search(
+        grid_size=grid_size,
+        start=start,
+        goal=goal,
+        distance_func=distance_func,
+        heuristic_func=manhattan_distance
+    )
+
+
+def adaptive_rgm_a_star(
+    grid_size: Tuple[int, int],
+    start: Tuple[int, int],
+    goal: Tuple[int, int],
+    grid_to_x_map: Callable[[int, int], float],
+    N_ord: List[int],
+    d_res_far: float,
+    d_res_near: float,
+    w: float = 2.0,
+    x0: float = 0.0,
+    heuristic_func: Callable[[Tuple[int, int], Tuple[int, int]], float] = manhattan_distance
+) -> List[Tuple[int, int]]:
+    """
+    Perform RGM-guided A* search with d_res adapting based on heuristic distance to goal.
+
+    This strategy dynamically adjusts the d_res parameter used in RGM calculations.
+    When the current position is far from the goal (as per the heuristic), d_res_far
+    is predominantly used. As the position gets closer to the goal, d_res transitions
+    towards d_res_near. This allows for potentially different search behaviors
+    (e.g., more explorative far away, more exploitative nearby).
+
+    Args:
+        grid_size: Tuple (rows, cols) specifying the grid dimensions.
+        start: Start position (row, col).
+        goal: Goal position (row, col).
+        grid_to_x_map: Function to map grid position (row, col) to a scalar x value.
+        N_ord: Set of orbital orders for RGM.
+        d_res_far: Depth parameter value when far from the goal.
+        d_res_near: Depth parameter value when near the goal.
+        w: Weight parameter for RGM.
+        x0: Reference point for RGM.
+        heuristic_func: Function to estimate distance to goal. Defaults to manhattan_distance.
+
+    Returns:
+        List of positions (row, col) representing the path from start to goal.
+        The A* search might not be strictly admissible due to dynamic edge costs.
+    """
+    h_start = heuristic_func(start, goal)
+
+    def adaptive_distance_func(pos1: Tuple[int, int], pos2: Tuple[int, int]) -> float:
+        h_current = heuristic_func(pos1, goal)
+
+        if h_start == 0:  # Handles case where start is the goal or h_start is zero
+            h_ratio = 0.0
+        else:
+            h_ratio = min(1.0, h_current / h_start)  # Clamped ratio
+
+        # Linearly interpolate d_res based on the heuristic ratio
+        current_d_res = d_res_far * h_ratio + d_res_near * (1.0 - h_ratio)
+
+        x1 = grid_to_x_map(pos1[0], pos1[1])
+        x2 = grid_to_x_map(pos2[0], pos2[1])
+        
+        d_base = 1.0  # Base distance for adjacent grid cells
+
+        return rgm_distance(x1, x2, current_d_res, N_ord, d_base, w, x0)
+
+    return a_star_search(
+        grid_size=grid_size,
+        start=start,
+        goal=goal,
+        distance_func=adaptive_distance_func,
+        heuristic_func=heuristic_func  # Use the provided heuristic
+    )
+
+
+def rgm_a_star_2d(
+    grid_size: Tuple[int, int],
+    start: Tuple[int, int],
+    goal: Tuple[int, int],
+    grid_to_xy_map: Callable[[int, int], Tuple[float, float]],
+    d_res: float,
+    N_ord: List[int],
+    w: float = 2.0,
+    x0_vec: Tuple[float, float] = (0.0, 0.0)
+) -> List[Tuple[int, int]]:
+    """
+    Perform RGM-guided A* search on a grid using 2D adaptability.
+
+    Args:
+        grid_size: Tuple (rows, cols) specifying the grid dimensions
+        start: Start position (row, col)
+        goal: Goal position (row, col)
+        grid_to_xy_map: Function to map grid position (row, col) to (x_val, y_val)
+        d_res: Depth parameter
+        N_ord: Set of orbital orders
+        w: Weight parameter
+        x0_vec: Reference point vector (x0_x, x0_y)
+
+    Returns:
+        List of positions (row, col) representing the path from start to goal
+    """
+    # Define the RGM distance function for adjacent grid positions using 2D adaptability
+    def distance_func(pos1, pos2):
+        return rgm_grid_distance_2d(pos1, pos2, grid_to_xy_map, d_res, N_ord, w, x0_vec)
+
     # Use Manhattan distance as a heuristic
     # Note: This might not be admissible for A* if RGM distances can be less than Manhattan,
     # but it works for demonstration purposes

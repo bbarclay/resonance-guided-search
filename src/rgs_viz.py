@@ -15,7 +15,8 @@ import os
 import sys
 
 # Import from within the package
-from src.rgs_core import adaptability, adaptability_array
+from src.rgs_core import adaptability, adaptability_array, adaptability_2d, adaptability_2d_array
+from typing import List, Tuple, Optional, Union, Dict, Callable
 
 
 def plot_adaptability_landscape(
@@ -108,6 +109,154 @@ def plot_adaptability_landscape(
     return fig, ax
 
 
+def plot_grid_pathfinding(
+    grid_size: Tuple[int, int],
+    start: Tuple[int, int],
+    goal: Tuple[int, int],
+    paths: Dict[str, List[Tuple[int, int]]],
+    grid_to_x_map: Callable[[int, int], float],  # Maps grid (r,c) to a single float x
+    d_res: float,
+    N_ord: List[int],
+    x0: float = 0.0,  # For 1D adaptability
+    title: Optional[str] = None,
+    save_path: Optional[str] = None,
+    fig_size: Tuple[float, float] = (10, 8)
+) -> Tuple[Figure, Axes]:
+    """
+    Plot paths on a grid with 1D adaptability values (mapped from grid) as the background.
+
+    Args:
+        grid_size: Tuple (rows, cols) specifying the grid dimensions.
+        start: Tuple (row, col) of the start position.
+        goal: Tuple (row, col) of the goal position.
+        paths: Dictionary mapping path names to lists of (row, col) coordinates.
+        grid_to_x_map: Function mapping (row, col) grid coordinates to a scalar x value.
+        d_res: Depth parameter for adaptability calculation.
+        N_ord: Set of orbital orders.
+        x0: Reference point for 1D adaptability calculation.
+        title: Plot title. If None, a default is generated.
+        save_path: Path to save the figure. If None, not saved.
+        fig_size: Figure size.
+
+    Returns:
+        Tuple (fig, ax) containing the figure and axes.
+    """
+    rows, cols = grid_size
+    fig, ax = plt.subplots(figsize=fig_size)
+
+    # Compute 1D adaptability values for each grid cell using grid_to_x_map
+    A_grid = np.zeros((rows, cols))
+    for r in range(rows):
+        for c in range(cols):
+            x_val = grid_to_x_map(r, c)
+            A_grid[r, c] = adaptability(x_val, d_res, N_ord, x0) # Using 1D adaptability
+
+    im = ax.imshow(A_grid, cmap='viridis', origin='upper', interpolation='none')
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label('Adaptability $A(x, d_{res})$') # Label for 1D adaptability
+
+    # Plot paths (this part is identical to plot_grid_pathfinding_2d_background)
+    path_colors = ['white', 'red', 'green', 'magenta', 'cyan', 'yellow']
+    line_styles = ['-', '--', '-.', ':', '-', '--']
+    for i, (path_name, path) in enumerate(paths.items()):
+        if not path: # Handle empty paths
+            continue
+        path_array = np.array(path)
+        ax.plot(path_array[:, 1], path_array[:, 0],
+                color=path_colors[i % len(path_colors)],
+                linestyle=line_styles[i % len(line_styles)],
+                linewidth=2.5,
+                label=path_name)
+
+    ax.plot(start[1], start[0], 'bo', markersize=10, label='Start')
+    ax.plot(goal[1], goal[0], 'rx', markersize=10, label='Goal')
+
+    ax.set_xlabel('Column')
+    ax.set_ylabel('Row')
+
+    if title is None:
+        title = (f'Pathfinding Comparison ({rows}x{cols} Grid, 1D Adaptability Background)\n'
+                   f'$d_{{res}}={d_res:.2f}, N_{{ord}}=\\{{{N_ord[0]},...,{N_ord[-1]}\\}}, x0={x0:.2f}$')
+    ax.set_title(title)
+
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='best')
+
+    ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
+    ax.grid(which='minor', color='black', linestyle='-', linewidth=0.5, alpha=0.2)
+
+    ax.set_xlim(-0.5, cols - 0.5)
+    ax.set_ylim(rows - 0.5, -0.5) # Origin 'upper' means (0,0) is top-left
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+    return fig, ax
+
+
+def plot_adaptability_landscape_2d(
+    x_coords_range: Tuple[float, float],
+    y_coords_range: Tuple[float, float],
+    d_res: float,
+    N_ord: List[int],
+    num_points: int = 100,
+    x0_vec: Tuple[float, float] = (0.0, 0.0),
+    cmap: str = 'viridis',
+    title: Optional[str] = None,
+    save_path: Optional[str] = None,
+    fig_size: Tuple[float, float] = (10, 8)
+) -> Tuple[Figure, Axes]:
+    """
+    Plot the 2D adaptability landscape A((x,y), d_res) as a heatmap.
+
+    Args:
+        x_coords_range: Tuple (min_x, max_x) for x-coordinates.
+        y_coords_range: Tuple (min_y, max_y) for y-coordinates.
+        d_res: Fixed depth parameter.
+        N_ord: Set of orbital orders.
+        num_points: Number of points for both x and y axes.
+        x0_vec: Reference point vector (x0_x, x0_y).
+        cmap: Colormap to use.
+        title: Plot title. If None, a default is generated.
+        save_path: Path to save the figure. If None, not saved.
+        fig_size: Figure size.
+
+    Returns:
+        Tuple (fig, ax) containing the figure and axes.
+    """
+    x_values = np.linspace(x_coords_range[0], x_coords_range[1], num_points)
+    y_values = np.linspace(y_coords_range[0], y_coords_range[1], num_points)
+
+    A_matrix = adaptability_2d_array(x_values, y_values, d_res, N_ord, x0_vec)
+
+    fig, ax = plt.subplots(figsize=fig_size)
+
+    # pcolormesh expects X, Y, C where C is (len(y_values), len(x_values))
+    # adaptability_2d_array returns A_matrix with shape (len(y_coords), len(x_coords))
+    # which matches the requirement.
+    im = ax.pcolormesh(x_values, y_values, A_matrix, cmap=cmap, shading='auto')
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label(f'Adaptability $A((x,y), d_{{res}}={d_res:.2f})$')
+
+    ax.set_xlabel('X coordinate')
+    ax.set_ylabel('Y coordinate')
+
+    if title is None:
+        title = (f'2D Adaptability Landscape $A((x,y), d_{{res}}={d_res:.2f})$\n'
+                   f'$N_{{ord}}=\\{{{N_ord[0]},...,{N_ord[-1]}\\}}, x0={x0_vec}$')
+    ax.set_title(title)
+    ax.set_aspect('equal', 'box') # Ensure square pixels
+
+    ax.grid(True, alpha=0.3)
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+    return fig, ax
+
+
 def plot_adaptability_profile(
     x_range: Tuple[float, float], 
     d_res_values: List[float], 
@@ -171,99 +320,83 @@ def plot_adaptability_profile(
     return fig, ax
 
 
-def plot_grid_pathfinding(
+def plot_grid_pathfinding_2d_background(
     grid_size: Tuple[int, int],
     start: Tuple[int, int],
     goal: Tuple[int, int],
     paths: Dict[str, List[Tuple[int, int]]],
-    grid_to_x_map: callable,
+    grid_to_xy_map: Callable[[int, int], Tuple[float, float]],
     d_res: float,
     N_ord: List[int],
-    x0: float = 0.0,
+    x0_vec: Tuple[float, float] = (0.0, 0.0),
     title: Optional[str] = None,
     save_path: Optional[str] = None,
     fig_size: Tuple[float, float] = (10, 8)
 ) -> Tuple[Figure, Axes]:
     """
-    Plot paths on a grid with adaptability values as the background.
-    
+    Plot paths on a grid with 2D adaptability values as the background.
+
     Args:
-        grid_size: Tuple (rows, cols) specifying the grid dimensions
-        start: Tuple (row, col) of the start position
-        goal: Tuple (row, col) of the goal position
-        paths: Dictionary mapping path names to lists of (row, col) coordinates
-        grid_to_x_map: Function mapping (row, col) grid coordinates to x values
-        d_res: Depth parameter for adaptability calculation
-        N_ord: Set of orbital orders
-        x0: Reference point for adaptability calculation
-        title: Plot title (if None, a default title is generated)
-        save_path: Path to save the figure (if None, the figure is not saved)
-        fig_size: Figure size in inches
-        
+        grid_size: Tuple (rows, cols) specifying the grid dimensions.
+        start: Tuple (row, col) of the start position.
+        goal: Tuple (row, col) of the goal position.
+        paths: Dictionary mapping path names to lists of (row, col) coordinates.
+        grid_to_xy_map: Function mapping (row, col) to (x_val, y_val) for adaptability.
+        d_res: Depth parameter for adaptability calculation.
+        N_ord: Set of orbital orders.
+        x0_vec: Reference point vector (x0_x, x0_y).
+        title: Plot title. If None, a default is generated.
+        save_path: Path to save the figure. If None, not saved.
+        fig_size: Figure size.
+
     Returns:
-        Tuple (fig, ax) containing the figure and axes
+        Tuple (fig, ax) containing the figure and axes.
     """
     rows, cols = grid_size
-    
-    # Create the figure and axes
     fig, ax = plt.subplots(figsize=fig_size)
-    
-    # Create a meshgrid for the grid
-    X, Y = np.meshgrid(range(cols), range(rows))
-    
-    # Compute adaptability values for each grid cell
+
     A_grid = np.zeros((rows, cols))
     for r in range(rows):
         for c in range(cols):
-            x = grid_to_x_map(r, c)
-            A_grid[r, c] = adaptability(x, d_res, N_ord, x0)
-    
-    # Plot the adaptability background
+            xy_val = grid_to_xy_map(r, c)
+            A_grid[r, c] = adaptability_2d(xy_val, d_res, N_ord, x0_vec)
+
     im = ax.imshow(A_grid, cmap='viridis', origin='upper', interpolation='none')
-    
-    # Add a colorbar
     cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label('Adaptability $A(x, d_{res})$')
-    
-    # Plot the paths
-    colors = ['white', 'red', 'green', 'magenta', 'cyan', 'yellow']
+    cbar.set_label('Adaptability $A((x,y), d_{res})$')
+
+    path_colors = ['white', 'red', 'green', 'magenta', 'cyan', 'yellow']
     line_styles = ['-', '--', '-.', ':', '-', '--']
-    
     for i, (path_name, path) in enumerate(paths.items()):
         path_array = np.array(path)
-        ax.plot(path_array[:, 1], path_array[:, 0], 
-                color=colors[i % len(colors)], 
+        ax.plot(path_array[:, 1], path_array[:, 0],
+                color=path_colors[i % len(path_colors)],
                 linestyle=line_styles[i % len(line_styles)],
-                linewidth=2.5, 
+                linewidth=2.5,
                 label=path_name)
-    
-    # Plot start and goal positions
+
     ax.plot(start[1], start[0], 'bo', markersize=10, label='Start')
     ax.plot(goal[1], goal[0], 'rx', markersize=10, label='Goal')
-    
-    # Set axis labels and title
+
     ax.set_xlabel('Column')
     ax.set_ylabel('Row')
-    
+
     if title is None:
-        title = f'Pathfinding Comparison on a {rows}×{cols} Grid\nBackground: $A(x, d_{{res}}={d_res})$'
+        title = (f'Pathfinding Comparison ({rows}x{cols} Grid, 2D Adaptability Background)\n'
+                   f'$d_{{res}}={d_res:.2f}, N_{{ord}}=\\{{{N_ord[0]},...,{N_ord[-1]}\\}}, x0={x0_vec}$')
     ax.set_title(title)
-    
-    # Add grid lines and legend
+
     ax.grid(True, alpha=0.3)
     ax.legend(loc='best')
-    
-    # Add grid cells
+
     ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
     ax.grid(which='minor', color='black', linestyle='-', linewidth=0.5, alpha=0.2)
-    
-    # Set proper axis limits
+
     ax.set_xlim(-0.5, cols - 0.5)
     ax.set_ylim(rows - 0.5, -0.5)
-    
-    # Save the figure if a path is provided
+
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
+
     return fig, ax
