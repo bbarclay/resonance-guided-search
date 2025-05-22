@@ -35,6 +35,8 @@
 - **Adaptability Metric**: Compute and visualize the adaptability landscape for various orbital orders and depth parameters
 - **Resonance-Guided Metric (RGM)**: Modulate standard distance metrics to guide search toward adaptable states
 - **Pathfinding Algorithms**: Compare standard A* search with RGM-guided A* search in grid-based environments
+- **2D Adaptability**: Extend adaptability calculations to 2D configuration spaces.
+- **Adaptive RGM Pathfinding**: Dynamically adjust `d_res` during pathfinding for potentially improved search behavior.
 - **Visualization Tools**: Generate heatmaps, profiles, and pathfinding comparisons
 - **Mathematical Proofs**: Includes rigorous proofs for key properties of the framework
 - **Comprehensive Testing**: Verify all theoretical claims through unit tests
@@ -74,6 +76,23 @@ x1, x2 = 0.3, 0.7
 d_base = abs(x1 - x2)  # Base distance (e.g., Euclidean)
 d_rgm = rgm_distance(x1, x2, d_res, N_ord, d_base, w=2.0)
 print(f"Base distance: {d_base}, RGM distance: {d_rgm}")
+
+# --- 2D RGS Core Functionality ---
+from src.rgs_core import adaptability_2d, rgm_distance_2d
+# import numpy as np # Required for np.sqrt
+
+# Calculate 2D adaptability
+pos = (0.5, 0.3)
+x0_vec = (0.0, 0.0)
+# Assume d_res and N_ord are defined as in the 1D example above
+a_2d = adaptability_2d(pos, d_res, N_ord, x0_vec)
+print(f"2D Adaptability at pos={pos}: {a_2d}")
+
+# Calculate 2D RGM distance
+pos1, pos2 = (0.3, 0.2), (0.7, 0.6)
+d_base_2d = np.sqrt((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2) # Euclidean
+d_rgm_2d = rgm_distance_2d(pos1, pos2, d_res, N_ord, d_base_2d, w=2.0, x0_vec=x0_vec)
+print(f"Base 2D distance: {d_base_2d}, 2D RGM distance: {d_rgm_2d}")
 ```
 
 ### Visualization
@@ -95,6 +114,22 @@ fig, ax = plot_adaptability_profile(
     d_res_values=[1.0, 5.0, 10.0, 50.0],
     N_ord=list(range(1, 13))
 )
+
+# --- 2D Visualization ---
+from src.rgs_viz import plot_adaptability_landscape_2d, plot_grid_pathfinding_2d_background
+
+# Plot 2D adaptability landscape
+fig_2d_land, ax_2d_land = plot_adaptability_landscape_2d(
+    x_coords_range=(0, 1),
+    y_coords_range=(0, 1),
+    d_res=10.0, # Example d_res
+    N_ord=list(range(1, 13))
+    # x0_vec can be specified if not (0.0, 0.0)
+)
+
+# plot_grid_pathfinding_2d_background can be used similarly to plot_grid_pathfinding,
+# but requires a grid_to_xy_map and uses 2D adaptability for the background.
+# (See pathfinding examples for grid_to_xy_map).
 ```
 
 ### Pathfinding
@@ -124,6 +159,44 @@ rgm_path = rgm_a_star(
     N_ord=list(range(1, 13)),
     w=2.0
 )
+
+# --- Adaptive RGM A* Search (1D Adaptability Background) ---
+from src.rgs_pathfinding import adaptive_rgm_a_star
+
+adaptive_path = adaptive_rgm_a_star(
+    grid_size=grid_size,
+    start=start,
+    goal=goal,
+    grid_to_x_map=grid_to_x_map, # Same grid_to_x_map as rgm_a_star
+    N_ord=list(range(1, 13)),
+    d_res_far=5.0,   # d_res when far from goal
+    d_res_near=80.0, # d_res when near goal
+    w=2.0
+)
+print(f"Adaptive RGM A* path length: {len(adaptive_path)}")
+
+# --- RGM A* Search with 2D Adaptability Background ---
+from src.rgs_pathfinding import rgm_a_star_2d
+
+# Define mapping from grid positions to (x,y) float tuples
+def grid_to_xy_map(row, col):
+    # Example: map to unit square
+    # Assumes grid_size is defined, e.g., grid_size = (20,30)
+    x_val = float(col) / grid_size[1] 
+    y_val = float(row) / grid_size[0]
+    return (x_val, y_val)
+
+rgm_path_2d = rgm_a_star_2d(
+    grid_size=grid_size,
+    start=start,
+    goal=goal,
+    grid_to_xy_map=grid_to_xy_map,
+    d_res=20.0,
+    N_ord=list(range(1, 13)),
+    w=2.0,
+    x0_vec=(0.0, 0.0)
+)
+print(f"RGM A* (2D background) path length: {len(rgm_path_2d)}")
 ```
 
 ### Running Tests
@@ -216,8 +289,10 @@ resonance-guided-search/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_adaptability_landscape.py
+│   ├── test_adaptive_rgm.py  # New
 │   ├── test_mathematical_properties.py
-│   └── test_rgm_pathfinding.py
+│   ├── test_rgm_pathfinding.py
+│   └── test_2d_adaptability_and_rgm.py # New
 ├── notebooks/
 │   └── rgs_interactive_demo.ipynb
 ├── compile_latex.sh
