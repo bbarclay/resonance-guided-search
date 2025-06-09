@@ -5,32 +5,29 @@ This module implements an A* search algorithm with Resonance-Guided Metric (RGM)
 as described in the paper.
 """
 
-import numpy as np
 import heapq
-from typing import List, Tuple, Dict, Set, Callable, Optional
-import sys
-import os
+from typing import List, Tuple, Callable
 
 # Import from within the package
-from src.rgs_core import adaptability, rgm_distance
+from .rgs_core import rgm_distance
 
 
 class Node:
     """A node in the search graph for A* algorithm."""
-    
+
     def __init__(self, position: Tuple[int, int], parent=None):
         self.position = position
         self.parent = parent
         self.g = 0  # Cost from start node to current node
         self.h = 0  # Heuristic (estimated cost from current node to goal)
         self.f = 0  # Total cost (g + h)
-    
+
     def __eq__(self, other):
         return self.position == other.position
-    
+
     def __lt__(self, other):
         return self.f < other.f
-    
+
     def __hash__(self):
         return hash(self.position)
 
@@ -38,11 +35,11 @@ class Node:
 def manhattan_distance(pos1: Tuple[int, int], pos2: Tuple[int, int]) -> float:
     """
     Calculate the Manhattan distance between two positions.
-    
+
     Args:
         pos1: First position (row, col)
         pos2: Second position (row, col)
-        
+
     Returns:
         Manhattan distance
     """
@@ -50,17 +47,17 @@ def manhattan_distance(pos1: Tuple[int, int], pos2: Tuple[int, int]) -> float:
 
 
 def rgm_grid_distance(
-    pos1: Tuple[int, int], 
-    pos2: Tuple[int, int], 
-    grid_to_x_map: Callable[[int, int], float], 
-    d_res: float, 
-    N_ord: List[int], 
-    w: float = 2.0, 
-    x0: float = 0.0
+    pos1: Tuple[int, int],
+    pos2: Tuple[int, int],
+    grid_to_x_map: Callable[[int, int], float],
+    d_res: float,
+    N_ord: List[int],
+    w: float = 2.0,
+    x0: float = 0.0,
 ) -> float:
     """
     Calculate the RGM distance between two adjacent grid positions.
-    
+
     Args:
         pos1: First position (row, col)
         pos2: Second position (row, col)
@@ -69,17 +66,17 @@ def rgm_grid_distance(
         N_ord: Set of orbital orders
         w: Weight parameter
         x0: Reference point
-        
+
     Returns:
         RGM distance
     """
     # Get x values corresponding to grid positions
     x1 = grid_to_x_map(pos1[0], pos1[1])
     x2 = grid_to_x_map(pos2[0], pos2[1])
-    
+
     # Base distance (Manhattan distance = 1 for adjacent cells)
     d_base = 1.0
-    
+
     # Calculate RGM distance
     return rgm_distance(x1, x2, d_res, N_ord, d_base, w, x0)
 
@@ -89,42 +86,46 @@ def a_star_search(
     start: Tuple[int, int],
     goal: Tuple[int, int],
     distance_func: Callable[[Tuple[int, int], Tuple[int, int]], float],
-    heuristic_func: Callable[[Tuple[int, int], Tuple[int, int]], float]
+    heuristic_func: Callable[[Tuple[int, int], Tuple[int, int]], float],
 ) -> List[Tuple[int, int]]:
     """
     Perform A* search on a grid.
-    
+
     Args:
         grid_size: Tuple (rows, cols) specifying the grid dimensions
         start: Start position (row, col)
         goal: Goal position (row, col)
         distance_func: Function to calculate distance between adjacent positions
         heuristic_func: Function to estimate distance to goal
-        
+
     Returns:
         List of positions (row, col) representing the path from start to goal
     """
     rows, cols = grid_size
-    
+
     # Create start and goal nodes
     start_node = Node(start)
     goal_node = Node(goal)
-    
+
     # Initialize open and closed lists
     open_list = []
     closed_set = set()
-    
+
+    tie_breaker_counter = 0  # Initialize tie-breaker counter
+
     # Add the start node to the open list
-    heapq.heappush(open_list, (start_node.f, id(start_node), start_node))
-    
+    heapq.heappush(open_list, (start_node.f, tie_breaker_counter, start_node))
+    tie_breaker_counter += 1
+
     # Loop until the open list is empty
     while open_list:
         # Get the node with the lowest f score
+        # The tie_breaker_counter ensures FIFO for nodes with same f_score
         _, _, current_node = heapq.heappop(open_list)
-        
+
         # Add the current node to the closed list
         closed_set.add(current_node.position)
-        
+
         # Check if we reached the goal
         if current_node.position == goal_node.position:
             # Reconstruct the path
@@ -133,29 +134,37 @@ def a_star_search(
                 path.append(current_node.position)
                 current_node = current_node.parent
             return path[::-1]  # Return path from start to goal
-        
+
         # Generate neighboring positions
-        neighbors = []
         for dr, dc in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # Right, Down, Left, Up
-            new_position = (current_node.position[0] + dr, current_node.position[1] + dc)
-            
+            new_position = (
+                current_node.position[0] + dr,
+                current_node.position[1] + dc,
+            )
+
             # Check if the position is valid
-            if (new_position[0] < 0 or new_position[0] >= rows or
-                new_position[1] < 0 or new_position[1] >= cols):
+            if (
+                new_position[0] < 0
+                or new_position[0] >= rows
+                or new_position[1] < 0
+                or new_position[1] >= cols
+            ):
                 continue
-            
+
             # Create a new node
             neighbor = Node(new_position, current_node)
-            
+
             # Skip if the neighbor is in the closed list
             if neighbor.position in closed_set:
                 continue
-            
+
             # Calculate g, h, and f values
-            neighbor.g = current_node.g + distance_func(current_node.position, neighbor.position)
+            neighbor.g = current_node.g + distance_func(
+                current_node.position, neighbor.position
+            )
             neighbor.h = heuristic_func(neighbor.position, goal_node.position)
             neighbor.f = neighbor.g + neighbor.h
-            
+
             # Check if the neighbor is already in the open list with a better score
             skip = False
             for _, _, open_node in open_list:
@@ -164,27 +173,26 @@ def a_star_search(
                     break
             if skip:
                 continue
-            
+
             # Add the neighbor to the open list
-            heapq.heappush(open_list, (neighbor.f, id(neighbor), neighbor))
-    
+            heapq.heappush(open_list, (neighbor.f, tie_breaker_counter, neighbor))
+            tie_breaker_counter += 1
+
     # No path found
     return []
 
 
 def standard_a_star(
-    grid_size: Tuple[int, int],
-    start: Tuple[int, int],
-    goal: Tuple[int, int]
+    grid_size: Tuple[int, int], start: Tuple[int, int], goal: Tuple[int, int]
 ) -> List[Tuple[int, int]]:
     """
     Perform standard A* search on a grid using Manhattan distance.
-    
+
     Args:
         grid_size: Tuple (rows, cols) specifying the grid dimensions
         start: Start position (row, col)
         goal: Goal position (row, col)
-        
+
     Returns:
         List of positions (row, col) representing the path from start to goal
     """
@@ -194,7 +202,7 @@ def standard_a_star(
         start=start,
         goal=goal,
         distance_func=lambda pos1, pos2: 1.0,  # All adjacent cells have a cost of 1
-        heuristic_func=manhattan_distance
+        heuristic_func=manhattan_distance,
     )
 
 
@@ -206,11 +214,11 @@ def rgm_a_star(
     d_res: float,
     N_ord: List[int],
     w: float = 2.0,
-    x0: float = 0.0
+    x0: float = 0.0,
 ) -> List[Tuple[int, int]]:
     """
     Perform RGM-guided A* search on a grid.
-    
+
     Args:
         grid_size: Tuple (rows, cols) specifying the grid dimensions
         start: Start position (row, col)
@@ -220,21 +228,29 @@ def rgm_a_star(
         N_ord: Set of orbital orders
         w: Weight parameter
         x0: Reference point
-        
+
     Returns:
         List of positions (row, col) representing the path from start to goal
     """
+
     # Define the RGM distance function for adjacent grid positions
     def distance_func(pos1, pos2):
         return rgm_grid_distance(pos1, pos2, grid_to_x_map, d_res, N_ord, w, x0)
-    
-    # Use Manhattan distance as a heuristic
-    # Note: This might not be admissible for A* if RGM distances can be less than Manhattan,
-    # but it works for demonstration purposes
+
+    # Use Manhattan distance as a heuristic.
+    # Note: Manhattan distance is generally NOT an admissible heuristic when RGM distance is used.
+    # Admissibility requires h(n) <= cost(n, n_goal) for all n.
+    # Here, RGM distance (cost between adjacent cells) can be less than 1 (the Manhattan distance between adjacent cells).
+    # This means A* with this heuristic is NOT guaranteed to find the shortest path.
+    # If guaranteed optimality is required, one should use:
+    #   1. Dijkstra's algorithm (equivalent to A* with h=0 for all nodes).
+    #   2. A custom admissible heuristic designed for RGM (e.g., based on minimum possible RGM values).
+    # For the current demonstration purposes, the Manhattan distance heuristic is kept,
+    # but users should be aware of its limitations regarding optimal path guarantees.
     return a_star_search(
         grid_size=grid_size,
         start=start,
         goal=goal,
         distance_func=distance_func,
-        heuristic_func=manhattan_distance
+        heuristic_func=manhattan_distance,
     )

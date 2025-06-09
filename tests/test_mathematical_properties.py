@@ -33,17 +33,25 @@ class TestAdaptabilityBounds(unittest.TestCase):
         d_res_values = [1.0, 5.0, 20.0, 100.0]  # Test different depth parameters
         N_ord_sets = [
             [1, 2, 3, 4, 5],  # Low orders
-            [10, 11, 12],     # High orders
-            [1, 5, 10],       # Sparse
-            list(range(1, 13))  # Full range
+            [10, 11, 12],  # High orders
+            [1, 5, 10],  # Sparse
+            list(range(1, 13)),  # Full range
         ]
 
         for d_res in d_res_values:
             for N_ord in N_ord_sets:
                 for x in x_values:
                     a = adaptability(x, d_res, N_ord)
-                    self.assertGreaterEqual(a, 0, f"Adaptability < 0 for x={x}, d_res={d_res}, N_ord={N_ord}")
-                    self.assertLessEqual(a, 1, f"Adaptability > 1 for x={x}, d_res={d_res}, N_ord={N_ord}")
+                    self.assertGreaterEqual(
+                        a,
+                        0,
+                        f"Adaptability < 0 for x={x}, d_res={d_res}, N_ord={N_ord}",
+                    )
+                    self.assertLessEqual(
+                        a,
+                        1,
+                        f"Adaptability > 1 for x={x}, d_res={d_res}, N_ord={N_ord}",
+                    )
 
 
 class TestAdaptabilityPeriodicity(unittest.TestCase):
@@ -68,16 +76,24 @@ class TestAdaptabilityPeriodicity(unittest.TestCase):
                 # For theta, adding 1 to x should increase by 2π
                 t1 = theta(x, x0)
                 t2 = theta(x + 1, x0)
-                self.assertAlmostEqual(t1 % (2*np.pi), t2 % (2*np.pi), places=10,
-                                     msg=f"Theta periodicity failed for x={x}, d_res={d_res}")
+                self.assertAlmostEqual(
+                    t1 % (2 * np.pi),
+                    t2 % (2 * np.pi),
+                    places=10,
+                    msg=f"Theta periodicity failed for x={x}, d_res={d_res}",
+                )
 
                 # For phi, adding 1 to x should increase by d_res·π
                 p1 = phi(x, d_res, x0)
                 p2 = phi(x + 1, d_res, x0)
                 expected_diff = d_res * np.pi
                 actual_diff = p2 - p1
-                self.assertAlmostEqual(actual_diff, expected_diff, places=10,
-                                     msg=f"Phi increment failed for x={x}, d_res={d_res}")
+                self.assertAlmostEqual(
+                    actual_diff,
+                    expected_diff,
+                    places=10,
+                    msg=f"Phi increment failed for x={x}, d_res={d_res}",
+                )
 
     def test_coupling_function_periodicity(self):
         """
@@ -96,7 +112,7 @@ class TestAdaptabilityPeriodicity(unittest.TestCase):
             (1, 1.0),
             (2, 2.0),
             (3, 3.0),
-            (4, 4.0)
+            (4, 4.0),
         ]
 
         for n, d_res in test_cases:
@@ -104,8 +120,12 @@ class TestAdaptabilityPeriodicity(unittest.TestCase):
             h2 = coupling_function(x + 1, d_res, n, x0)
 
             # Use a reasonable tolerance for floating point comparison
-            self.assertAlmostEqual(h1, h2, places=5,
-                                 msg=f"Coupling function periodicity failed for n={n}, d_res={d_res}")
+            self.assertAlmostEqual(
+                h1,
+                h2,
+                places=5,
+                msg=f"Coupling function periodicity failed for n={n}, d_res={d_res}",
+            )
 
 
 class TestRGMProperties(unittest.TestCase):
@@ -124,7 +144,9 @@ class TestRGMProperties(unittest.TestCase):
                 for x2 in x_values:
                     d_base = abs(x1 - x2)  # Euclidean distance in 1D
                     d = rgm_distance(x1, x2, d_res, N_ord, d_base, w)
-                    self.assertGreaterEqual(d, 0, f"RGM distance < 0 for x1={x1}, x2={x2}, w={w}")
+                    self.assertGreaterEqual(
+                        d, 0, f"RGM distance < 0 for x1={x1}, x2={x2}, w={w}"
+                    )
 
     def test_rgm_identity(self):
         """Test that d_rgm(x, x) = 0 for all x."""
@@ -138,8 +160,9 @@ class TestRGMProperties(unittest.TestCase):
             for x in x_values:
                 d_base = 0.0  # Distance to self is 0
                 d = rgm_distance(x, x, d_res, N_ord, d_base, w)
-                self.assertAlmostEqual(d, 0, places=10,
-                                      msg=f"RGM distance to self != 0 for x={x}, w={w}")
+                self.assertAlmostEqual(
+                    d, 0, places=10, msg=f"RGM distance to self != 0 for x={x}, w={w}"
+                )
 
     def test_rgm_symmetry(self):
         """Test that d_rgm(x1, x2) = d_rgm(x2, x1) for all x1, x2."""
@@ -155,8 +178,12 @@ class TestRGMProperties(unittest.TestCase):
                     d_base = abs(x1 - x2)  # Euclidean distance in 1D
                     d12 = rgm_distance(x1, x2, d_res, N_ord, d_base, w)
                     d21 = rgm_distance(x2, x1, d_res, N_ord, d_base, w)
-                    self.assertAlmostEqual(d12, d21, places=10,
-                                          msg=f"RGM not symmetric for x1={x1}, x2={x2}, w={w}")
+                    self.assertAlmostEqual(
+                        d12,
+                        d21,
+                        places=10,
+                        msg=f"RGM not symmetric for x1={x1}, x2={x2}, w={w}",
+                    )
 
 
 class TestRGMConvergence(unittest.TestCase):
@@ -177,8 +204,9 @@ class TestRGMConvergence(unittest.TestCase):
             d = rgm_distance(x1, x2, d_res, N_ord, d_base, w)
             # As w gets smaller, d should approach d_base
             relative_error = abs(d - d_base) / d_base
-            self.assertLessEqual(relative_error, w * 10,
-                               f"RGM not converging to base metric for w={w}")
+            self.assertLessEqual(
+                relative_error, w * 10, f"RGM not converging to base metric for w={w}"
+            )
 
     def test_high_adaptability_preference(self):
         """Test that as w increases, paths through high adaptability regions are favored."""
@@ -200,7 +228,9 @@ class TestRGMConvergence(unittest.TestCase):
         A_high = adaptability_values[max_idx]
 
         if (A_high - A_low) < 0.1:
-            self.skipTest("Could not find points with sufficiently different adaptability values")
+            self.skipTest(
+                "Could not find points with sufficiently different adaptability values"
+            )
 
         x_low_A = x_samples[min_idx]
         x_high_A = x_samples[max_idx]
@@ -218,20 +248,28 @@ class TestRGMConvergence(unittest.TestCase):
 
             # As w increases, the ratio d_high/d_low should decrease
             # (high adaptability path becomes more favorable)
-            self.assertLess(d_high, d_low,
-                          f"High adaptability path not favored for w={w}")
+            self.assertLess(
+                d_high, d_low, f"High adaptability path not favored for w={w}"
+            )
 
             # For large w, verify that the ratio is decreasing as w increases
             if w > 1.0:
                 # Calculate modulating functions directly
-                f_mod_low = modulating_function(A_low, adaptability(x_common, d_res, N_ord), w)
-                f_mod_high = modulating_function(A_high, adaptability(x_common, d_res, N_ord), w)
+                f_mod_low = modulating_function(
+                    A_low, adaptability(x_common, d_res, N_ord), w
+                )
+                f_mod_high = modulating_function(
+                    A_high, adaptability(x_common, d_res, N_ord), w
+                )
 
                 # The ratio of modulating functions should be less than 1
                 # (high adaptability path has smaller modulating function)
                 ratio = f_mod_high / f_mod_low
-                self.assertLess(ratio, 1.0,
-                              f"Modulating function ratio not favorable for high adaptability at w={w}")
+                self.assertLess(
+                    ratio,
+                    1.0,
+                    f"Modulating function ratio not favorable for high adaptability at w={w}",
+                )
 
 
 if __name__ == "__main__":
