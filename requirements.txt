@@ -3,3 +3,5 @@ matplotlib>=3.4.0
 ipywidgets>=7.6.0
 jupyter>=1.0.0
 pytest>=6.0.0
+flake8
+black

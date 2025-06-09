@@ -20,7 +20,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import directly from the modules
-from src.rgs_core import adaptability, rgm_distance, modulating_function
+from src.rgs_core import adaptability, rgm_distance, modulating_function, adaptability_array
 
 
 class TestAdaptabilityBounds(unittest.TestCase):
@@ -126,6 +126,44 @@ class TestAdaptabilityPeriodicity(unittest.TestCase):
                 places=5,
                 msg=f"Coupling function periodicity failed for n={n}, d_res={d_res}",
             )
+
+    def test_adaptability_metric_periodicity(self):
+        """Test that A(x + 1, d_res) = A(x, d_res) for various inputs."""
+        # Test parameters
+        x_values = np.linspace(0, 1, 10)  # Test over a range of x values
+        d_res_values = [1.0, 5.0, 20.0]  # Test different depth parameters
+        N_ord_sets = [
+            [1, 2, 3],  # Low orders
+            [10, 11, 12],  # High orders
+            list(range(1, 7)),  # Medium range
+        ]
+        x0 = 0.0
+
+        for d_res in d_res_values:
+            for N_ord in N_ord_sets:
+                for x in x_values:
+                    a1 = adaptability(x, d_res, N_ord, x0)
+                    a2 = adaptability(x + 1, d_res, N_ord, x0)
+                    self.assertAlmostEqual(
+                        a1,
+                        a2,
+                        places=10,
+                        msg=f"Adaptability metric periodicity failed for x={x}, d_res={d_res}, N_ord={N_ord}",
+                    )
+
+
+class TestAdaptabilityInputValidation(unittest.TestCase):
+    """Test input validation for adaptability functions."""
+
+    def test_empty_n_ord_raises_value_error_adaptability(self):
+        """Test that adaptability() raises ValueError for empty N_ord."""
+        with self.assertRaises(ValueError):
+            adaptability(x=0.5, d_res=1.0, N_ord=[], x0=0.0)
+
+    def test_empty_n_ord_raises_value_error_adaptability_array(self):
+        """Test that adaptability_array() raises ValueError for empty N_ord."""
+        with self.assertRaises(ValueError):
+            adaptability_array(x_array=np.array([0.5]), d_res=1.0, N_ord=[], x0=0.0)
 
 
 class TestRGMProperties(unittest.TestCase):
